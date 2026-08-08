@@ -1,6 +1,11 @@
 import streamlit as st
-from pages_content import decision_matrix, valuation_bridge, synergy_build, \
-    deal_structure, roadmap
+from pages_content import (
+    decision_matrix,
+    valuation_bridge,
+    synergy_build,
+    deal_structure,
+    roadmap,
+)
 
 st.set_page_config(
     page_title="Project Bridge — Deal Command Center",
