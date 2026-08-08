@@ -43,13 +43,10 @@ with st.sidebar:
         "Offline, rules-based assistant — no API key required. Pick a scenario "
         "or describe one, and the assumptions update across every tab."
     )
-    st.selectbox(
-        "Choose a scenario",
-        list(scenarios.keys()),
-        key="scenario_select",
-        on_change=apply_scenario,
-    )
 
+    # NOTE: prompt/buttons must come BEFORE the selectbox below, since they
+    # write to st.session_state["scenario_select"] — Streamlit only allows
+    # that write before the widget with that key has been drawn this run.
     prompt = st.text_input(
         "...or describe one in your own words",
         placeholder="e.g. assume a recession hits",
@@ -63,6 +60,13 @@ with st.sidebar:
     if st.button("Reset to Base Case"):
         st.session_state["scenario_select"] = "Base Case"
         apply_scenario()
+
+    st.selectbox(
+        "Choose a scenario",
+        list(scenarios.keys()),
+        key="scenario_select",
+        on_change=apply_scenario,
+    )
 
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "Decision Matrix",
