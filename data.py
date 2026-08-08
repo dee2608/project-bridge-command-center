@@ -2,6 +2,11 @@
 All model numbers for the Project Bridge Deal Command Center.
 Source: Project Bridge case analysis doc (Sections 2.1, 3.4, 4.1-4.4, 5.5).
 All figures illustrative, per the case pack disclaimer.
+
+This file also contains the "AI Scenario Assistant" and "AI Advisor" logic.
+Both are rules-based (no external API, no key required) — they read the
+current inputs and generate a written verdict using conditional templates,
+not a real language model call.
 """
 
 company_snapshot = {
@@ -34,8 +39,6 @@ decision_matrix = {
     "Partnership":         [2, 3, 5, 5, 5],
     "Walk away":           [1, 2, 5, 5, 5],
 }
-# Weighted totals (for reference): As-is 2.25, Phased 4.35, Control 4.00,
-# Partnership 3.75, Walk away 3.25
 
 valuation_bridge = {
     "Ditto": {
@@ -123,3 +126,108 @@ roadmap_milestones = [
     {"milestone": "Phase-2 decision (exercise call option or not)",
      "timing": "Month 18-24", "owner": "Ditto Board"},
 ]
+
+
+# ---------------------------------------------------------------------------
+# AI SCENARIO ASSISTANT — preset "what-if" bundles, matched from a free-text
+# prompt via simple keyword rules. No API key, no external call.
+# ---------------------------------------------------------------------------
+
+scenarios = {
+    "Base Case": {
+        "weights": [0.25, 0.25, 0.20, 0.15, 0.15],
+        "ditto_ev_revenue_mult": 4.0, "ditto_ev_ebitda_mult": 38.0,
+        "covergrid_ev_revenue_mult": 2.3, "covergrid_ev_ebitda_mult": 18.0,
+        "y3_conversion": 8,
+    },
+    "Recession": {
+        "weights": [0.20, 0.35, 0.15, 0.15, 0.15],
+        "ditto_ev_revenue_mult": 2.8, "ditto_ev_ebitda_mult": 28.0,
+        "covergrid_ev_revenue_mult": 1.6, "covergrid_ev_ebitda_mult": 13.0,
+        "y3_conversion": 4,
+    },
+    "Aggressive Growth": {
+        "weights": [0.35, 0.30, 0.10, 0.10, 0.15],
+        "ditto_ev_revenue_mult": 5.5, "ditto_ev_ebitda_mult": 48.0,
+        "covergrid_ev_revenue_mult": 3.0, "covergrid_ev_ebitda_mult": 24.0,
+        "y3_conversion": 13,
+    },
+    "Conservative / Risk-Averse": {
+        "weights": [0.15, 0.20, 0.30, 0.20, 0.15],
+        "ditto_ev_revenue_mult": 3.5, "ditto_ev_ebitda_mult": 33.0,
+        "covergrid_ev_revenue_mult": 2.0, "covergrid_ev_ebitda_mult": 16.0,
+        "y3_conversion": 6,
+    },
+}
+
+
+def match_prompt_to_scenario(prompt: str) -> str:
+    """Keyword-match a free-text prompt to one of the preset scenarios."""
+    p = prompt.lower()
+    if any(w in p for w in ["recession", "downturn", "slowdown", "crisis", "crash"]):
+        return "Recession"
+    if any(w in p for w in ["aggressive", "boom", "high growth", "bull", "optimistic"]):
+        return "Aggressive Growth"
+    if any(w in p for w in ["conservative", "cautious", "risk-averse", "risk averse", "safe"]):
+        return "Conservative / Risk-Averse"
+    return "Base Case"
+
+
+# ---------------------------------------------------------------------------
+# AI ADVISOR — reads current (possibly edited) numbers and writes a short
+# templated verdict. Rules-based, not a model call.
+# ---------------------------------------------------------------------------
+
+def decision_matrix_advisor(weighted_totals: dict, norm_weights: list) -> str:
+    ranked = sorted(weighted_totals.items(), key=lambda x: -x[1])
+    winner, winner_score = ranked[0]
+    runner_up, runner_score = ranked[1]
+    gap = round(winner_score - runner_score, 2)
+
+    lines = []
+    if gap < 0.3:
+        lines.append(
+            f"**{winner}** and **{runner_up}** are close ({winner_score} vs "
+            f"{runner_score}) — soft factors like culture fit could realistically "
+            f"tip this either way."
+        )
+    else:
+        lines.append(
+            f"**{winner}** leads clearly by {gap} points over **{runner_up}** "
+            f"({winner_score} vs {runner_score})."
+        )
+
+    if norm_weights[1] >= 0.40:
+        lines.append(
+            f"Your current weighting leans heavily on financial value "
+            f"({norm_weights[1]:.0%}) — worth checking this doesn't undercount "
+            f"brand/culture risk given CoverGrid's declining NPS."
+        )
+    if norm_weights[2] >= 0.30:
+        lines.append(
+            f"Brand/culture preservation is weighted at {norm_weights[2]:.0%} — "
+            f"a high bar that favors options preserving Ditto's advisory-first "
+            f"identity over pure financial upside."
+        )
+    return " ".join(lines)
+
+
+def valuation_advisor(total_consideration: float, covergrid_equity: float) -> str:
+    diff_pct = (total_consideration - covergrid_equity) / covergrid_equity
+    if diff_pct < -0.05:
+        return (
+            f"At these multiples, the deal is priced **{abs(diff_pct):.1%} below** "
+            f"CoverGrid's standalone equity value — a favorable entry point, "
+            f"assuming the multiples hold up in diligence."
+        )
+    elif diff_pct > 0.05:
+        return (
+            f"At these multiples, the deal is priced **{diff_pct:.1%} above** "
+            f"CoverGrid's standalone equity value — worth renegotiating, or "
+            f"justifying the premium explicitly through synergy value."
+        )
+    return (
+        "At these multiples, the deal is priced roughly **at fair value** "
+        "relative to CoverGrid's standalone equity — neither a bargain nor "
+        "overpriced."
+    )
