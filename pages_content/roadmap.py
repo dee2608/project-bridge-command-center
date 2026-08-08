@@ -1,16 +1,42 @@
 import streamlit as st
-import pandas as pd
 from data import roadmap_milestones
+
+STATUS_OPTIONS = ["On track", "At risk", "Delayed"]
 
 
 def render():
     st.subheader("100-Day / Phased Integration Roadmap")
-    st.caption("Milestones from Phase-1 close through the Phase-2 KPI decision.")
+    st.caption(
+        "Set a status per milestone — the overall phase health banner below "
+        "updates live."
+    )
 
-    df = pd.DataFrame(roadmap_milestones)
-    df.columns = ["Milestone", "Timing", "Owner"]
+    header = st.columns([3, 2, 2, 2])
+    header[0].markdown("**Milestone**")
+    header[1].markdown("**Timing**")
+    header[2].markdown("**Owner**")
+    header[3].markdown("**Status**")
 
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    statuses = []
+    for i, m in enumerate(roadmap_milestones):
+        c1, c2, c3, c4 = st.columns([3, 2, 2, 2])
+        c1.write(m["milestone"])
+        c2.write(m["timing"])
+        c3.write(m["owner"])
+        status = c4.selectbox(
+            "Status", STATUS_OPTIONS,
+            key=f"roadmap_status_{i}",
+            label_visibility="collapsed",
+        )
+        statuses.append(status)
+
+    st.divider()
+    if "Delayed" in statuses:
+        st.error("🔴 Overall Phase health: **At risk** — one or more milestones are delayed.")
+    elif "At risk" in statuses:
+        st.warning("🟡 Overall Phase health: **Caution** — some milestones need attention.")
+    else:
+        st.success("🟢 Overall Phase health: **On track**")
 
     st.markdown("#### Phase breakdown")
     c1, c2 = st.columns(2)
