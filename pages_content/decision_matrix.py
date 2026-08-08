@@ -1,63 +1,78 @@
 import streamlit as st
 import pandas as pd
-from data import decision_matrix
+from data import decision_matrix, decision_matrix_advisor
 
 
 def render():
     st.subheader("Weighted Decision Matrix")
-    st.caption("Scores 1-5, higher = better. Weighted score shows which option "
-               "wins once strategic fit, financial value, brand/culture, "
-               "regulatory risk and execution complexity are all accounted for.")
+    st.caption(
+        "Scores 1-5, higher = better. Edit any score directly in the grid below, "
+        "or adjust the criteria weights — the weighted totals and winner update live."
+    )
 
     dm = decision_matrix
     options = ["As-is", "Renegotiate/Phased", "Control, no earnout",
                "Partnership", "Walk away"]
 
-    df = pd.DataFrame({
+    st.markdown("**Criteria weights** (don't need to total 100 — auto-normalized)")
+    c1, c2, c3, c4, c5 = st.columns(5)
+    w_strategic = c1.number_input(
+        "Strategic fit %", 0, 100,
+        st.session_state.get("dm_weight_strategic", 25), key="dm_weight_strategic")
+    w_financial = c2.number_input(
+        "Financial value %", 0, 100,
+        st.session_state.get("dm_weight_financial", 25), key="dm_weight_financial")
+    w_culture = c3.number_input(
+        "Brand/culture %", 0, 100,
+        st.session_state.get("dm_weight_culture", 20), key="dm_weight_culture")
+    w_reg = c4.number_input(
+        "Reg. risk %", 0, 100,
+        st.session_state.get("dm_weight_reg", 15), key="dm_weight_reg")
+    w_exec = c5.number_input(
+        "Execution %", 0, 100,
+        st.session_state.get("dm_weight_exec", 15), key="dm_weight_exec")
+
+    weights = [w_strategic, w_financial, w_culture, w_reg, w_exec]
+    weight_sum = sum(weights) or 1
+    norm_weights = [w / weight_sum for w in weights]
+
+    grid_df = pd.DataFrame({
         "Criterion": dm["criteria"],
-        "Weight": [f"{w:.0%}" for w in dm["weights"]],
         **{opt: dm[opt] for opt in options},
     })
 
+    st.markdown("**Scores grid** — click any cell to edit")
+    edited_df = st.data_editor(
+        grid_df,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            opt: st.column_config.NumberColumn(opt, min_value=1, max_value=5, step=1)
+            for opt in options
+        },
+        key="dm_grid_editor",
+    )
+
     weighted_totals = {}
     for opt in options:
-        total = sum(score * weight for score, weight in zip(dm[opt], dm["weights"]))
+        scores = edited_df[opt].tolist()
+        total = sum(s * w for s, w in zip(scores, norm_weights))
         weighted_totals[opt] = round(total, 2)
-
-    totals_row = {"Criterion": "Weighted score / 5", "Weight": ""}
-    totals_row.update(weighted_totals)
-    df = pd.concat([df, pd.DataFrame([totals_row])], ignore_index=True)
 
     winner = max(weighted_totals, key=weighted_totals.get)
 
+    summary_df = pd.DataFrame([{"Criterion": "Weighted score / 5", **weighted_totals}])
+
     def highlight_winner(col):
-        if col.name == winner:
-            return ["background-color: #D6EFE9"] * len(col)
-        return [""] * len(col)
+        return ["background-color: #D6EFE9" if col.name == winner else "" for _ in col]
 
     st.dataframe(
-        df.style.apply(highlight_winner, axis=0),
+        summary_df.style.apply(highlight_winner, axis=0),
         use_container_width=True,
         hide_index=True,
     )
 
-    st.success(f"**Highest weighted score: {winner}** ({weighted_totals[winner]}/5) "
-               f"— combines the upside of ownership with downside protection.")
+    st.success(f"**Highest weighted score: {winner}** ({weighted_totals[winner]}/5)")
 
-    with st.expander("Try a different lens"):
-        st.caption("Re-weight the criteria to see if the winner changes.")
-        lens = st.radio(
-            "Weighting lens",
-            ["Case-brief weights (default)", "Financial-value only", "Brand/culture only"],
-            horizontal=True,
-        )
-        if lens == "Financial-value only":
-            idx = dm["criteria"].index("Financial value")
-            best = max(options, key=lambda o: dm[o][idx])
-            st.write(f"On financial value alone, **{best}** scores highest "
-                     f"({dm[best][idx]}/5).")
-        elif lens == "Brand/culture only":
-            idx = dm["criteria"].index("Brand/culture preservation")
-            best = max(options, key=lambda o: dm[o][idx])
-            st.write(f"On brand/culture preservation alone, **{best}** scores "
-                     f"highest ({dm[best][idx]}/5).")
+    if st.button("🤖 Ask the AI Advisor", key="dm_advisor_btn"):
+        st.info(decision_matrix_advisor(weighted_totals, norm_weights))
