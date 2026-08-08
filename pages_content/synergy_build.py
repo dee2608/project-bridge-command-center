@@ -14,8 +14,12 @@ def render():
 
     y3_rate = st.slider(
         "Year 3 conversion rate (%)",
-        min_value=3, max_value=15, value=default_y3, step=1,
-        help="Year 1 and Year 2 rates scale proportionally with this."
+        min_value=3, max_value=15,
+        value=st.session_state.get("synergy_y3_rate", default_y3),
+        step=1,
+        key="synergy_y3_rate",
+        help="Year 1 and Year 2 rates scale proportionally with this. "
+             "Set automatically when you pick a scenario in the sidebar."
     )
 
     # Scale Y1/Y2 proportionally to the Y3 slider, keeping the case's ramp shape
